@@ -125,10 +125,38 @@ def get_email_and_token(proxies: Any = None) -> tuple:
     
     if EMAIL_API_MODE == "freemail":
         headers = {"Authorization": f"Bearer {FREEMAIL_API_TOKEN}", "Content-Type": "application/json"}
+
+        try:
+            domain_res = requests.get(
+                f"{FREEMAIL_API_URL.rstrip('/')}/api/domains",
+                headers=headers, 
+                proxies=mail_proxies, 
+                verify=_ssl_verify(), 
+                timeout=60
+            )
+            domain_res.raise_for_status()
+            domains_list = domain_res.json()
+            
+            if not domains_list or not isinstance(domains_list, list):
+                print(f"[{ts()}] [ERROR] Freemail 后端无可用的域名库存！")
+                return None, None
+
+            random_domain_index = random.randint(0, len(domains_list) - 1)
+            print(f"[{ts()}] [INFO] 成功拉取 Freemail 域名列表，随机选用: {domains_list[random_domain_index]}")
+
+        except Exception as e:
+            print(f"[{ts()}] [ERROR] 获取 Freemail 可用域名列表失败: {e}")
+            return None, None
+        
+        
+        api_params = {
+            "domainIndex": random_domain_index
+        }
         for attempt in range(5):
             try:
                 res = requests.get(
                     f"{FREEMAIL_API_URL.rstrip('/')}/api/generate",
+                    params=api_params,
                     headers=headers, proxies=mail_proxies, verify=_ssl_verify(), timeout=15
                 )
                 res.raise_for_status()
@@ -314,8 +342,8 @@ def get_oai_code(email: str, jwt: str = "", proxies: Any = None, processed_mail_
         except Exception as e:
             print(f"\n[{ts()}] [ERROR] IMAP 初始登录失败: {e}")
             mail_conn = None
-
-    for attempt in range(40):
+    start_time = time.time()
+    for attempt in range(20):
         try:
             if EMAIL_API_MODE == "imap":
                 if not mail_conn:
@@ -731,8 +759,24 @@ def run(proxy: Optional[str]) -> tuple:
             if otp_url:
                 _post_with_retry(s, otp_url if otp_url.startswith("http") else f"https://auth.openai.com{otp_url}", headers={"openai-sentinel-token": sentinel, "content-type": "application/json"}, json_body={}, proxies=proxies, timeout=30)
             
-            code = get_oai_code(email, jwt=email_jwt, proxies=proxies, processed_mail_ids=processed_mails)
-            if not code: return None, None
+            code = ""
+            for resend_attempt in range(5):
+                if resend_attempt > 0:
+                    print(f"\n[{ts()}] [INFO] 正在重试 {resend_attempt}/5...")
+                    try:
+                        _post_with_retry(s, "https://auth.openai.com/api/accounts/email-otp/resend", headers={"openai-sentinel-token": sentinel, "content-type": "application/json"}, json_body={}, proxies=proxies, timeout=15)
+                        time.sleep(2)  
+                    except Exception as e:
+                        print(f"[{ts()}] [WARNING] 重新发送请求异常: {e}")
+                
+                code = get_oai_code(email, jwt=email_jwt, proxies=proxies, processed_mail_ids=processed_mails)
+                
+                if code:
+                    break
+
+            if not code:
+                print(f"[{ts()}] [ERROR] 重试次数上限，丢弃当前邮箱。")
+                return None, None
             
             code_resp = _post_with_retry(s, "https://auth.openai.com/api/accounts/email-otp/validate", headers={"openai-sentinel-token": sentinel, "content-type": "application/json"}, json_body={"code": code}, proxies=proxies)
             if code_resp.status_code != 200:
@@ -762,8 +806,24 @@ def run(proxy: Optional[str]) -> tuple:
 
             pwd_json = pwd_login_resp.json() if pwd_login_resp.status_code == 200 else {}
             if pwd_json.get("page", {}).get("type", "") == "email_otp_verification" or "verify" in str(pwd_json.get("continue_url", "")):
-                code2 = get_oai_code(email, jwt=email_jwt, proxies=proxies, processed_mail_ids=processed_mails)
-                if not code2: return None, None
+                code2 = ""
+                for resend_attempt in range(5):
+                    if resend_attempt > 0:
+                        print(f"\n[{ts()}] [INFO] 正在重试 {resend_attempt}/5...")
+                        try:
+                            _post_with_retry(s, "https://auth.openai.com/api/accounts/email-otp/resend", headers={"openai-sentinel-token": sentinel2, "content-type": "application/json"}, json_body={}, proxies=proxies, timeout=15)
+                            time.sleep(2)
+                        except Exception as e:
+                            print(f"[{ts()}] [WARNING] 重新发送请求异常: {e}")
+                    
+                    code2 = get_oai_code(email, jwt=email_jwt, proxies=proxies, processed_mail_ids=processed_mails)
+                    
+                    if code2:
+                        break 
+                if not code2:
+                    print(f"[{ts()}] [ERROR] 重新发送后依然未收到验证码，彻底放弃。")
+                    return None, None
+                    
                 code2_resp = _post_with_retry(s, "https://auth.openai.com/api/accounts/email-otp/validate", headers={"openai-sentinel-token": sentinel2, "content-type": "application/json"}, json_body={"code": code2}, proxies=proxies)
                 if code2_resp.status_code != 200:
                     print(f"[{ts()}] [ERROR] 二次安全验证 OTP 校验失败: {code2_resp.text}")
@@ -784,7 +844,16 @@ def run(proxy: Optional[str]) -> tuple:
         workspace_id = str((auth_json.get("workspaces") or [{}])[0].get("id", "")).strip()
         select_resp = _post_with_retry(s, "https://auth.openai.com/api/accounts/workspace/select", headers={"content-type": "application/json"}, data=f'{{"workspace_id":"{workspace_id}"}}', proxies=proxies)
 
-        current_url = str((select_resp.json() or {}).get("continue_url", "")).strip()
+        if select_resp.status_code != 200:
+            print(f"[{ts()}] [ERROR] 工作区(Workspace)绑定失败 (HTTP {select_resp.status_code})。可能触发了最后一步的 IP 风控！")
+            return None, None
+        try:
+            select_data = select_resp.json()
+        except Exception:
+            print(f"[{ts()}] [ERROR] 遭到了非预期拦截！服务器返回了空数据或 HTML，而不是 JSON。")
+            return None, None
+            
+        current_url = str((select_data or {}).get("continue_url", "")).strip()
         for _ in range(15):
             f_resp = s.get(current_url, allow_redirects=False, proxies=proxies, verify=_ssl_verify(), timeout=15)
             if f_resp.status_code in [301, 302, 303, 307, 308]:
@@ -805,7 +874,9 @@ def run(proxy: Optional[str]) -> tuple:
         return None, None
 
     except Exception as e:
+        import traceback
         print(f"[{ts()}] [ERROR] 注册主流程发生严重异常: {e}")
+        print(f"[{ts()}] [DEBUG] 追踪定位:\n{traceback.format_exc()}")
         return None, None
 
 def _normalize_cpa_auth_files_url(api_url: str) -> str:
