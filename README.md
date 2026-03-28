@@ -1,35 +1,41 @@
-# Email OTP Retrieval & Mailbox Integration Utility
+# Email OTP Retrieval, OpenAI Registration, and CPA Inventory Utility
 
-A Python utility for mailbox integration, one-time passcode (OTP) retrieval, message parsing, proxy-aware email polling, local JSON backup, optional Clash proxy rotation, and optional internal credential-file inventory checks.
+A Python utility that provides multi-backend mailbox support, multi-domain rotation, OTP polling and extraction, Clash/Mihomo node switching, fastest-node preferred selection, multi-threaded proxy-pool registration, CPA multi-threaded inventory inspection, account health checking, credential recovery, low-stock replenishment, local token archival, and log privacy masking.
 
 > Use only in systems and environments you own or are explicitly authorized to test.
 > Make sure your use complies with applicable laws, platform rules, and service terms.
 
-## ✨ Features
+## Features
 
-#### Flexible mailbox and verification workflow
-- **Multi-backend mailbox support**: Natively supports `cloudflare_temp_email`, `freemail`, and standard `imap` mailbox backends, with flexible switching through the configuration file.
-- **Dual-path domain rotation**: Supports custom multi-domain pools defined in configuration for randomized distribution; in `freemail` mode, it can also dynamically fetch available domains from the API and rotate among them automatically.
-- **OTP polling and extraction**: Automatically polls mailbox content and extracts 6-digit OTP codes from subject lines, message bodies, HTML content, or raw email payloads.
-- **Robust email parsing**: Includes MIME header decoding, HTML-to-text conversion, raw mail parsing, and common encoding compatibility handling.
+### Flexible mailbox and verification workflow
+- **Multi-backend mailbox support**: Supports `cloudflare_temp_email`, `freemail`, `imap`, `cloudmail`, and `mail_curl`.
+- **Multi-domain rotation**: Supports comma-separated mailbox domains and randomized selection when generating addresses.
+- **OTP polling and extraction**: Can extract 6-digit OTP codes from subject lines, plain text, HTML content, and raw email payloads.
+- **Robust parsing**: Includes MIME decoding, HTML-to-text cleanup, raw message parsing, and common encoding handling.
 
-#### Proxy management and network resilience
-- **Clash proxy rotation support**: Supports automatic outbound node switching through Clash External Controller APIs. When enabled, the workflow rotates nodes before each registration task, applies blacklist-based filtering, and verifies connectivity after switching.
-- **Flexible network routing**: Supports a global proxy configuration and allows separate proxy behavior for mailbox API requests or IMAP connections to adapt to different network environments.
-- **Region-aware proxy validation**: Tests outbound connectivity and can skip blocked or unsuitable regions such as `CN` / `HK` after node switching.
-- **Retry handling for unstable networks**: Provides basic anti-jitter and timeout retry handling at key network request points to improve stability in unattended or unstable network scenarios.
+### Proxy management and network resilience
+- **Clash / Mihomo node rotation**: Can switch outbound nodes through the Clash API before registration tasks.
+- **Fastest-node preferred mode**: Supports `fastest_mode: true` for latency-based preferred node selection. When enabled, the workflow prefers the lowest-latency available node instead of random blind selection. If one node is consistently the fastest, it may be selected repeatedly.
+- **Multi-threaded Clash proxy-pool mode**: Supports a multi-container / multi-port proxy pool via `clash_proxy_pool.pool_mode` + `warp_proxy_list`, so concurrent registration workers can use independent local proxy channels instead of sharing one global port.
+- **Single-instance and pool-mode support**: Works both in local single-Clash mode and in server-side multi-container mode.
+- **Flexible proxy routing**: Supports a global registration proxy and separate proxy behavior for mailbox API / IMAP traffic.
+- **Region-aware liveness checks**: Verifies outbound connectivity and rejects blocked or unsuitable regions such as `CN` / `HK`.
+- **Retry handling**: Includes retry and cooling logic for unstable networks, OTP polling, and temporary request failures.
 
-#### CPA inventory maintenance and operations
-- **Automated inventory inspection**: Provides an optional CPA maintenance mode that periodically checks account inventory in the CPA system and performs health and availability inspection.
-- **Invalid credential cleanup**: Supports a configurable weekly quota threshold. When an account is identified as exhausted, deactivated, or invalid, it can be removed from inventory automatically.
-- **Low-inventory replenishment**: Monitors effective account inventory in the CPA system and can trigger a preset replenishment batch when stock drops below the configured safety threshold.
-- **Credential renewal support**: When stored credentials are approaching expiration or have become invalid, the system can attempt refresh-based renewal and update the stored credential set.
+### CPA inventory maintenance and operations
+- **Optional CPA maintenance mode**: Can periodically inspect CPA inventory and replenish stock automatically when valid account count is low.
+- **Multi-threaded CPA inspection**: CPA health checks are processed concurrently, and worker count is controlled by `cpa_mode.threads`.
+- **Configurable maintenance switch**: CPA inspection / replenishment is enabled or disabled through `cpa_mode.enable`.
+- **Quota-threshold handling**: Supports configurable weekly quota threshold logic using `min_remaining_weekly_percent`.
+- **Disable or delete behavior controls**: You can choose whether exhausted or permanently dead accounts should be disabled only or physically removed by configuration.
+- **Credential refresh rescue**: When stored credentials become invalid, the script can attempt refresh-token recovery and update CPA storage.
 
-#### Archival output and privacy protection
-- **Controllable local archival**: In standard mode, JSON credentials and `accounts.txt` records can be stored locally by default. In CPA replenishment mode, the separate `save_to_local` switch lets you decide whether to retain a local backup while uploading remotely.
-- **CPA API upload integration**: Supports automatically pushing newly generated JSON credentials or refreshed valid credentials to the CPA internal API for centralized storage and retrieval.
-- **Log privacy masking**: Includes built-in masking for mailbox domain output in standard console logs to reduce direct exposure of sensitive information.
-- **Centralized YAML configuration**: Core runtime behavior—including proxy settings, retry counts, mailbox mode, output directory, Clash proxy rotation, and CPA inspection / backup parameters—is controlled through a single YAML configuration file.
+### Archival output and privacy protection
+- **Local JSON backup**: Saves generated tokens to local JSON files.
+- **Optional local backup in CPA mode**: In CPA replenishment mode, `save_to_local` controls whether local backup is still kept when uploading remotely.
+- **CPA upload integration**: Can upload newly generated credentials directly to CPA.
+- **Log masking**: Supports masking mailbox domains in console output.
+- **Centralized YAML configuration**: Runtime behavior is controlled through `config.yaml`.
 
 ## Table of Contents
 
@@ -39,42 +45,25 @@ A Python utility for mailbox integration, one-time passcode (OTP) retrieval, mes
   - [1. `email_api_mode`](#1-email_api_mode)
   - [2. `mail_domains`](#2-mail_domains)
   - [3. `gptmail_base`](#3-gptmail_base)
-  - [4. `default_proxy`](#4-default_proxy)
-  - [5. `clash_proxy_pool`](#5-clash_proxy_pool)
-  - [6. `imap`](#6-imap)
-  - [7. `freemail`](#7-freemail)
-  - [8. `admin_auth`](#8-admin_auth)
-  - [9. `max_otp_retries`](#9-max_otp_retries)
-  - [10. `use_proxy_for_email`](#10-use_proxy_for_email)
-  - [11. `enable_email_masking`](#11-enable_email_masking)
-  - [12. `token_output_dir`](#12-token_output_dir)
-  - [13. `cpa_mode`](#13-cpa_mode)
-  - [14. `normal_mode`](#14-normal_mode)
-  - [15. Configuration suggestions](#15-configuration-suggestions)
-- [16. `cloudmail`](#16-cloudmail)
-- [17. `mail_curl`](#17-mail_curl)
-- [18. `enable_multi_thread_reg`](#18-enable_multi_thread_reg)
-- [19. `reg_threads`](#19-reg_threads)
-- [20. `warp_proxy_list`](#20-warp_proxy_list)
-- [21. `cpa_mode.remove_on_limit_reached`](#21-cpa_moderemove_on_limit_reached)
-- [22. `cpa_mode.remove_dead_accounts`](#22-cpa_moderemove_dead_accounts)
-- [23. `cpa_mode.threads`](#23-cpa_modethreads)
-- [24. `normal_mode.target_count`](#24-normal_modetarget_count)
-- [25. Environment variables](#25-environment-variables)
-- [26. Config file name note](#26-config-file-name-note)
+  - [4. `admin_auth`](#4-admin_auth)
+  - [5. `imap`](#5-imap)
+  - [6. `freemail`](#6-freemail)
+  - [7. `cloudmail`](#7-cloudmail)
+  - [8. `mail_curl`](#8-mail_curl)
+  - [9. `default_proxy`](#9-default_proxy)
+  - [10. `enable_multi_thread_reg`](#10-enable_multi_thread_reg)
+  - [11. `reg_threads`](#11-reg_threads)
+  - [12. `clash_proxy_pool`](#12-clash_proxy_pool)
+  - [13. `warp_proxy_list`](#13-warp_proxy_list)
+  - [14. `max_otp_retries`](#14-max_otp_retries)
+  - [15. `use_proxy_for_email`](#15-use_proxy_for_email)
+  - [16. `enable_email_masking`](#16-enable_email_masking)
+  - [17. `token_output_dir`](#17-token_output_dir)
+  - [18. `cpa_mode`](#18-cpa_mode)
+  - [19. `normal_mode`](#19-normal_mode)
+  - [20. Configuration suggestions](#20-configuration-suggestions)
 - [Usage](#usage)
-- [Additional configuration fields actually used by the code](#additional-configuration-fields-actually-used-by-the-code)
-  - [16. `cloudmail`](#16-cloudmail)
-  - [17. `mail_curl`](#17-mail_curl)
-  - [18. `enable_multi_thread_reg`](#18-enable_multi_thread_reg)
-  - [19. `reg_threads`](#19-reg_threads)
-  - [20. `warp_proxy_list`](#20-warp_proxy_list)
-  - [21. `cpa_mode.remove_on_limit_reached`](#21-cpa_moderemove_on_limit_reached)
-  - [22. `cpa_mode.remove_dead_accounts`](#22-cpa_moderemove_dead_accounts)
-  - [23. `cpa_mode.threads`](#23-cpa_modethreads)
-  - [24. `normal_mode.target_count`](#24-normal_modetarget_count)
-  - [25. Environment variables](#25-environment-variables)
-  - [26. Config file name note](#26-config-file-name-note)
+- [Running Mihomo / Clash on a server](#running-mihomo--clash-on-a-server)
 - [Output Files](#output-files)
 - [Troubleshooting](#troubleshooting)
 - [Security Notes](#security-notes)
@@ -97,29 +86,62 @@ pip install PyYAML PySocks curl_cffi requests
 
 ## Configuration
 
-The project uses `config.yaml` in the repository root as the single configuration entry point.
+The project uses `config.yaml` in the repository root as the main configuration file.
 
-A typical configuration looks like this:
+A full example based on the current config template:
 
 ```yaml
-# [Mail backend mode]
-# Available values: "imap" / "freemail" / "cloudflare_temp_email"
+# [Mailbox API mode selection]
+# Optional values: "imap" / "freemail" / "cloudflare_temp_email" / "cloudmail" / "mail_curl"
 email_api_mode: "cloudflare_temp_email"
 
-# [Shared settings for cloudflare_temp_email / imap]
+# [Shared settings for cloudflare_temp_email / imap / cloudmail]
 mail_domains: "domain1.com,domain2.xyz,domain3.net"
 gptmail_base: "https://your-domain.com"
 
-# [Proxy configuration]
-default_proxy: "http://127.0.0.1:7897"
+# [cloudflare_temp_email-specific]
+admin_auth: ""
 
-# [Clash proxy rotation]
+# [imap-specific]
+imap:
+  server: "imap.gmail.com"
+  port: 993
+  user: ""
+  pass: ""
+
+# [freemail-specific]
+freemail:
+  api_url: "https://your-domain.com"
+  api_token: ""
+
+# [cloudmail-specific]
+cloudmail:
+  api_url: "https://your-domain.com"
+  admin_email: "admin@your-domain.com"
+  admin_password: "your-admin-password"
+
+# [mail_curl-specific]
+mail_curl:
+  api_base: "https://your-domain.com"
+  key: ""
+
+# [Proxy settings]
+default_proxy: ""
+enable_multi_thread_reg: false
+reg_threads: 10
+
+# [Clash proxy pool]
+# fastest_mode: true means latency-based preferred selection;
+# false means random blind selection. If one node is always the lowest latency,
+# it may be selected repeatedly.
 clash_proxy_pool:
   enable: false
+  pool_mode: false
   api_url: "http://127.0.0.1:9097"
+  fastest_mode: false
   group_name: "节点选择"
   secret: "set-your-secret"
-  test_proxy_url: "http://127.0.0.1:7897"
+  test_proxy_url: ""
   blacklist:
     - "自动"
     - "故障"
@@ -140,32 +162,29 @@ clash_proxy_pool:
     - "China"
     - "回国"
 
-# [Mode-specific settings: imap]
-imap:
-  server: "imap.gmail.com"
-  port: 993
-  user: ""
-  pass: ""
-
-# [Mode-specific settings: freemail]
-freemail:
-  api_url: "https://your-domain.com"
-  api_token: ""
-
-# [Mode-specific settings: cloudflare_temp_email]
-admin_auth: ""
+warp_proxy_list:
+  - "http://127.0.0.1:41001"
+  - "http://127.0.0.1:41002"
+  - "http://127.0.0.1:41003"
+  - "http://127.0.0.1:41004"
+  - "http://127.0.0.1:41005"
+  - "http://127.0.0.1:41006"
+  - "http://127.0.0.1:41007"
+  - "http://127.0.0.1:41008"
+  - "http://127.0.0.1:41009"
+  - "http://127.0.0.1:41010"
 
 # [OTP resend retries]
 max_otp_retries: 5
 
-# [Mail-side proxy options]
+# [Mailbox-side proxy settings]
 use_proxy_for_email: false
 enable_email_masking: true
 
-# [Local output directory]
+# [Token output directory]
 token_output_dir: ""
 
-# [CPA maintenance mode]
+# [CPA mode]
 cpa_mode:
   enable: false
   save_to_local: true
@@ -174,27 +193,35 @@ cpa_mode:
   min_accounts_threshold: 30
   batch_reg_count: 1
   min_remaining_weekly_percent: 80
+  remove_on_limit_reached: false
+  remove_dead_accounts: false
   check_interval_minutes: 60
+  threads: 10
 
-# [Standard loop mode]
+# [Normal mode]
 normal_mode:
   sleep_min: 5
   sleep_max: 30
+  target_count: 2
 ```
 
 ### 1. `email_api_mode`
 
-Selects which mailbox backend mode to use. Supported values:
+Selects which mailbox backend mode to use.
 
+Supported values:
 - `cloudflare_temp_email`
 - `freemail`
 - `imap`
+- `cloudmail`
+- `mail_curl`
 
 Mode summary:
-
-- **`cloudflare_temp_email`**: Uses a temp-mail style backend and requires `gptmail_base` plus `admin_auth`
-- **`freemail`**: Uses a Freemail-compatible API and requires `freemail.api_url` plus `freemail.api_token`
-- **`imap`**: Uses a real mailbox over IMAP and requires `imap.server / port / user / pass`
+- **`cloudflare_temp_email`**: requires `gptmail_base` + `admin_auth`
+- **`freemail`**: requires `freemail.api_url` + `freemail.api_token`
+- **`imap`**: requires `imap.server / port / user / pass`
+- **`cloudmail`**: requires `cloudmail.api_url / admin_email / admin_password`
+- **`mail_curl`**: requires `mail_curl.api_base / key`
 
 ### 2. `mail_domains`
 
@@ -206,11 +233,11 @@ Example:
 mail_domains: "a.com,b.net,c.org"
 ```
 
-The script generates mailbox addresses using a random prefix plus a randomly selected domain. If you only use one domain, simply provide one value.
+Used by `cloudflare_temp_email`, `imap`, and `cloudmail` mailbox-generation flows.
 
 ### 3. `gptmail_base`
 
-Base URL for the Cloudflare Temp Mail-style backend. This is only used when `email_api_mode: "cloudflare_temp_email"`.
+Base URL for the `cloudflare_temp_email` backend.
 
 Example:
 
@@ -218,79 +245,21 @@ Example:
 gptmail_base: "https://mail-api.example.com"
 ```
 
-Do not include a trailing slash.
+Notes:
+- do not include a trailing slash
+- this should be the backend API address, not a frontend panel URL
 
-### 4. `default_proxy`
+### 4. `admin_auth`
 
-Global proxy address used for primary network requests.
-
-Example:
-
-```yaml
-default_proxy: "http://127.0.0.1:7897"
-```
-
-Or:
+Administrator credential for `cloudflare_temp_email` mode.
 
 ```yaml
-default_proxy: "socks5://127.0.0.1:1080"
+admin_auth: "your_admin_secret"
 ```
 
-Leave it empty if your runtime environment already has direct connectivity.
+### 5. `imap`
 
-### 5. `clash_proxy_pool`
-
-`clash_proxy_pool` is an optional configuration block for automatic Clash node rotation via the External Controller API.
-
-```yaml
-clash_proxy_pool:
-  enable: false
-  api_url: "http://127.0.0.1:9097"
-  group_name: "节点选择"
-  secret: "set-your-secret"
-  test_proxy_url: "http://127.0.0.1:7897"
-  blacklist:
-    - "自动"
-    - "故障"
-    - "剩余"
-    - "到期"
-    - "官网"
-    - "Traffic"
-    - "DIRECT"
-    - "REJECT"
-    - "港"
-    - "HK"
-    - "Hongkong"
-    - "台"
-    - "TW"
-    - "Taiwan"
-    - "中"
-    - "CN"
-    - "China"
-    - "回国"
-```
-
-Field notes:
-
-- `enable`: enables automatic node switching before each registration task
-- `api_url`: Clash External Controller endpoint, usually on port `9090` or `9097`
-- `group_name`: proxy group keyword used to locate the actual selectable Clash group
-- `secret`: authentication secret for the Clash controller, if enabled
-- `test_proxy_url`: local proxy endpoint used for post-switch connectivity testing
-- `blacklist`: keywords used to exclude unwanted nodes such as unsupported regions or non-routable entries
-
-Behavior summary:
-
-- Queries the Clash controller for available proxy groups
-- Fuzzily matches the configured group name against actual Clash group names
-- Filters candidate nodes using the configured blacklist
-- Randomly selects a node and sends the switch command through the controller API
-- Verifies post-switch connectivity and skips blocked regions such as `CN` / `HK`
-- Falls back to the current IP if switching fails
-
-### 6. `imap`
-
-When `email_api_mode` is set to `imap`, configure the following block:
+Used when `email_api_mode: "imap"`.
 
 ```yaml
 imap:
@@ -301,15 +270,14 @@ imap:
 ```
 
 Field notes:
+- `server`: IMAP server address
+- `port`: usually `993`
+- `user`: mailbox login account
+- `pass`: IMAP password or app password
 
-- `server`: IMAP server address, such as `imap.gmail.com` or `imap.qq.com`
-- `port`: IMAP SSL port, typically `993`
-- `user`: mailbox login, usually the full email address
-- `pass`: IMAP password; for many providers this should be an app password or authorization code rather than the normal web password
+### 6. `freemail`
 
-### 7. `freemail`
-
-When `email_api_mode` is set to `freemail`, configure:
+Used when `email_api_mode: "freemail"`.
 
 ```yaml
 freemail:
@@ -318,72 +286,192 @@ freemail:
 ```
 
 Field notes:
-
-- `api_url`: base URL of the Freemail-compatible API
+- `api_url`: Freemail-compatible API base URL
 - `api_token`: Bearer token used for authentication
 
-### 8. `admin_auth`
+### 7. `cloudmail`
 
-When `email_api_mode` is set to `cloudflare_temp_email`, this field is used as the administrator credential for the temp-mail backend.
-
-Example:
+Used when `email_api_mode: "cloudmail"`.
 
 ```yaml
-admin_auth: "your_admin_secret"
+cloudmail:
+  api_url: "https://your-domain.com"
+  admin_email: "admin@your-domain.com"
+  admin_password: "your-admin-password"
 ```
 
-### 9. `max_otp_retries`
+### 8. `mail_curl`
 
-Controls the maximum number of resend / retry attempts when OTP retrieval fails.
+Used when `email_api_mode: "mail_curl"`.
 
-Example:
+```yaml
+mail_curl:
+  api_base: "https://your-domain.com"
+  key: "your-api-key"
+```
+
+### 9. `default_proxy`
+
+Global proxy address used for primary registration traffic.
+
+Examples:
+
+```yaml
+default_proxy: "http://127.0.0.1:7897"
+```
+
+```yaml
+default_proxy: "socks5://127.0.0.1:1080"
+```
+
+Leave empty if the runtime environment already has suitable direct connectivity.
+
+### 10. `enable_multi_thread_reg`
+
+Controls whether registration runs concurrently.
+
+```yaml
+enable_multi_thread_reg: false
+```
+
+- `false`: single-thread registration
+- `true`: multi-thread registration using a thread pool
+
+This applies to:
+- normal registration mode
+- CPA replenishment registration mode
+
+### 11. `reg_threads`
+
+Maximum concurrent registration thread count when multi-thread mode is enabled.
+
+```yaml
+reg_threads: 10
+```
+
+Recommendations:
+- start with a small value
+- scale up gradually based on proxy quality and mailbox throughput
+- avoid aggressive values in single-port shared-proxy mode
+
+### 12. `clash_proxy_pool`
+
+Optional configuration block for automatic Clash / Mihomo node switching.
+
+This block now includes `fastest_mode`, which controls whether node selection prefers the lowest-latency node or uses random blind selection.
+
+```yaml
+clash_proxy_pool:
+  enable: false
+  pool_mode: false
+  api_url: "http://127.0.0.1:9097"
+  fastest_mode: true
+  group_name: "节点选择"
+  secret: "set-your-secret"
+  test_proxy_url: ""
+  blacklist:
+    - "港"
+    - "HK"
+    - "台"
+    - "TW"
+    - "中"
+    - "CN"
+```
+
+Field notes:
+- `enable`: whether to enable automatic Clash node switching
+- `pool_mode`:
+  - `false` = local single-instance / single-container mode
+  - `true` = multi-container proxy-pool mode for concurrent registration
+- `api_url`: Clash API address
+- `fastest_mode`:
+  - `true` = prefer latency-tested / fastest available node
+  - `false` = random blind selection from the filtered node list
+  - note: if node A is consistently the lowest-latency node, it may be selected repeatedly
+- `group_name`: proxy-group keyword to locate the real selectable Clash group
+- `secret`: controller authentication secret
+- `test_proxy_url`: local proxy endpoint used for post-switch liveness verification
+- `blacklist`: keywords used to filter out unwanted nodes
+
+Behavior summary:
+- queries the Clash controller for proxy groups
+- fuzzy-matches the configured group name
+- filters node candidates using the blacklist
+- switches to a random valid node
+- verifies region and liveness after switching
+
+#### Multi-threaded proxy-pool explanation
+
+This is the part commonly missed when reading the config:
+
+- When `enable_multi_thread_reg: true` but `clash_proxy_pool.pool_mode: false`, registration workers still share one global proxy / controller context.
+- When `enable_multi_thread_reg: true` **and** `clash_proxy_pool.pool_mode: true`, workers can pull different proxy endpoints from `warp_proxy_list`, which is the intended multi-threaded Clash proxy-pool mode.
+- In pool mode, each local proxy endpoint is treated as an independent channel. The code also derives the controller port from the proxy port pattern, so a proxy like `41001` maps to an API port like `42001`.
+
+Use cases:
+- **Local single Clash client**: `enable: true`, `pool_mode: false`
+- **Server-side multi-container concurrent mode**: `enable: true`, `pool_mode: true`, and fill `warp_proxy_list`
+
+### 13. `warp_proxy_list`
+
+List of local proxy endpoints used only in proxy-pool mode.
+
+```yaml
+warp_proxy_list:
+  - "http://127.0.0.1:41001"
+  - "http://127.0.0.1:41002"
+  - "http://127.0.0.1:41003"
+```
+
+Important notes:
+- only used when `clash_proxy_pool.enable: true` and `clash_proxy_pool.pool_mode: true`
+- each endpoint should represent an independent outbound proxy/container
+- if pool mode is disabled, this list is ignored
+
+### 14. `max_otp_retries`
+
+Maximum number of OTP resend / retry attempts.
 
 ```yaml
 max_otp_retries: 5
 ```
 
-When messages are delayed or OTP extraction fails, the script uses this value to determine retry behavior.
+### 15. `use_proxy_for_email`
 
-### 10. `use_proxy_for_email`
-
-Controls whether mailbox-side requests should also use the proxy.
+Controls whether mailbox-side traffic also uses the configured proxy.
 
 ```yaml
 use_proxy_for_email: false
 ```
 
-- `false`: mailbox APIs / IMAP connections are direct by default
-- `true`: mailbox APIs / IMAP connections also go through the proxy
+- `false`: mailbox API / IMAP traffic is direct by default
+- `true`: mailbox API / IMAP traffic also goes through the proxy
 
-Enable this only when your mailbox API or IMAP service must be accessed through a proxy.
+### 16. `enable_email_masking`
 
-### 11. `enable_email_masking`
-
-Controls whether mailbox domains are masked in console logs.
+Controls whether mailbox domain information is masked in logs.
 
 ```yaml
 enable_email_masking: true
 ```
 
-- `true`: logs display masked mailbox output
-- `false`: logs display the full mailbox address
+- `true`: mask mailbox domain information in console output
+- `false`: print the full mailbox address
 
-### 12. `token_output_dir`
+### 17. `token_output_dir`
 
-Specifies the local output directory.
+Controls where local token JSON files and `accounts.txt` are saved.
 
 ```yaml
 token_output_dir: ""
 ```
 
-- Empty: output is written to the current script directory
-- Set a path: output is written to the specified directory
+- empty = save next to the script / current working directory
+- set a path = save to the specified directory
 
-The script creates the directory automatically when needed.
+### 18. `cpa_mode`
 
-### 13. `cpa_mode`
-
-`cpa_mode` is an optional maintenance configuration block for inventory inspection and upkeep:
+Optional CPA inventory inspection and replenishment configuration block.
 
 ```yaml
 cpa_mode:
@@ -394,46 +482,79 @@ cpa_mode:
   min_accounts_threshold: 30
   batch_reg_count: 1
   min_remaining_weekly_percent: 80
+  remove_on_limit_reached: false
+  remove_dead_accounts: false
   check_interval_minutes: 60
+  threads: 10
 ```
 
 Field notes:
+- `enable`: master switch for CPA inspection / replenishment mode
+- `save_to_local`: whether to keep local backup while uploading to CPA
+- `api_url`: CPA API endpoint
+- `api_token`: CPA API credential
+- `min_accounts_threshold`: replenish when valid stock falls below this value
+- `batch_reg_count`: number of accounts to register per replenishment cycle
+- `min_remaining_weekly_percent`: weekly remaining-quota threshold
+- `remove_on_limit_reached`: whether to physically delete exhausted accounts instead of disabling them
+- `remove_dead_accounts`: whether to physically delete permanently dead accounts instead of disabling them
+- `check_interval_minutes`: CPA inspection interval
+- `threads`: concurrent worker count for CPA health inspection
 
-- `enable`: enables CPA maintenance mode
-- `save_to_local`: whether to retain a local backup while uploading remotely in CPA mode
-- `api_url`: CPA internal API endpoint
-- `api_token`: CPA API credential / token
-- `min_accounts_threshold`: triggers replenishment logic when inventory falls below this value
-- `batch_reg_count`: number of items processed in each replenishment batch
-- `min_remaining_weekly_percent`: threshold used in health assessment logic
-- `check_interval_minutes`: inspection interval in minutes
+#### CPA multi-threaded inspection behavior
 
-### 14. `normal_mode`
+When `cpa_mode.enable: true`, the script can inspect CPA inventory concurrently.
 
-`normal_mode` controls the wait interval between iterations in the standard loop.
+- `cpa_mode.threads` controls inspection worker count
+- each account can be checked, refreshed, disabled, or deleted independently
+- replenishment registration can also run concurrently if registration multi-threading is enabled
+
+This makes CPA mode not just a simple periodic check, but a configurable multi-threaded inspection and replenishment workflow.
+
+### 19. `normal_mode`
+
+Configuration for standard local registration mode.
 
 ```yaml
 normal_mode:
   sleep_min: 5
   sleep_max: 30
+  target_count: 2
 ```
 
 Field notes:
+- `sleep_min`: minimum cooldown between cycles
+- `sleep_max`: maximum cooldown between cycles
+- `target_count`: number of successful registrations to complete before stopping automatically
 
-- `sleep_min`: minimum wait time in seconds after each cycle
-- `sleep_max`: maximum wait time in seconds after each cycle
+Rules:
+- `target_count: 0` = run continuously until interrupted
+- `target_count > 0` = stop automatically when the target is reached
 
-### 15. Configuration suggestions
+### 20. Configuration suggestions
 
-- **IMAP only**: focus on `email_api_mode`, `mail_domains`, `imap`, and `use_proxy_for_email`
-- **Freemail API only**: focus on `email_api_mode`, `freemail.api_url`, and `freemail.api_token`
-- **Cloudflare Temp Mail backend only**: focus on `email_api_mode`, `mail_domains`, `gptmail_base`, and `admin_auth`
-- **Clash rotation enabled**: additionally complete the `clash_proxy_pool` block and enable Clash external control in your local environment
-- **Inventory maintenance enabled**: additionally complete the full `cpa_mode` block
+Typical combinations:
+
+- **IMAP only**: `email_api_mode`, `mail_domains`, `imap`, `use_proxy_for_email`
+- **Freemail only**: `email_api_mode`, `freemail.api_url`, `freemail.api_token`
+- **Cloudflare temp mail only**: `email_api_mode`, `mail_domains`, `gptmail_base`, `admin_auth`
+- **CloudMail only**: `email_api_mode`, `mail_domains`, `cloudmail`
+- **Mail Curl only**: `email_api_mode`, `mail_curl`
+- **Single local Clash client**: `default_proxy`, `clash_proxy_pool.enable: true`, `pool_mode: false`
+- **Multi-threaded Clash proxy pool**: `enable_multi_thread_reg: true`, `clash_proxy_pool.enable: true`, `pool_mode: true`, and fill `warp_proxy_list`
+- **CPA inspection mode**: enable the full `cpa_mode` block and tune `threads`, `min_accounts_threshold`, and deletion behavior
+
+## Usage
+
+Run normally:
+
+```bash
+python wfxl_openai_regst.py
+```
 
 ## Running Mihomo / Clash on a server
 
-If you want to use Clash-based node rotation on a server, you can run Mihomo (Clash Meta compatible core) in the background and expose both a local mixed proxy port and the External Controller API.
+If you want to use Clash-based node rotation on a server, you can run Mihomo (Clash Meta compatible core) in the background and expose both a local mixed proxy port and the Clash API.
 
 ### 1. Prepare a working directory
 
@@ -452,25 +573,20 @@ mv mihomo-linux-amd64-v1.18.1 mihomo
 chmod +x mihomo
 ```
 
-If you use another CPU architecture, download the matching release from the Mihomo releases page.
-
 ### 3. Download your subscription-derived config
-
-Use a Clash-compatible subscription conversion link and request a Clash-style config. The following example uses `-U "Clash-meta"` so the upstream returns the expected format:
 
 ```bash
 wget -U "Clash-meta" -O /opt/clash/config.yaml 'YOUR_SUBSCRIPTION_CONVERTER_URL'
 ```
 
-### 4. Check the generated ports in `config.yaml`
+### 4. Check important fields in `config.yaml`
 
-After downloading the config, inspect the following fields inside `/opt/clash/config.yaml`:
+Inspect these fields in your Mihomo config:
+- `mixed-port`
+- `external-controller`
+- `secret`
 
-- `mixed-port`: the local proxy port used by this project, typically mapped to `default_proxy` and `clash_proxy_pool.test_proxy_url`
-- `external-controller`: the controller address used by `clash_proxy_pool.api_url`
-- `secret`: if present, copy it into `clash_proxy_pool.secret`
-
-For example, if your Mihomo config contains:
+Example:
 
 ```yaml
 mixed-port: 7897
@@ -478,13 +594,14 @@ external-controller: 127.0.0.1:9097
 secret: your-secret
 ```
 
-Then your project config should normally match that setup:
+Then align your project config:
 
 ```yaml
 default_proxy: "http://127.0.0.1:7897"
 
 clash_proxy_pool:
   enable: true
+  pool_mode: false
   api_url: "http://127.0.0.1:9097"
   secret: "your-secret"
   test_proxy_url: "http://127.0.0.1:7897"
@@ -496,253 +613,159 @@ clash_proxy_pool:
 nohup /opt/clash/mihomo -d /opt/clash > /opt/clash/clash.log 2>&1 &
 ```
 
-This starts Mihomo in the background and writes logs to `clash.log`.
-
 ### 6. Stop Mihomo
 
 ```bash
 pkill mihomo
 ```
 
-### 7. Recommended checks
+### 7. Multi-container proxy-pool idea
 
-Before enabling automatic node rotation in this project, confirm the following:
+If you use server-side concurrent registration and want each worker to use an independent Clash instance, you can expose multiple local proxy ports such as:
 
-- Mihomo is running normally in the background
-- the local mixed proxy port is reachable
-- the External Controller API is reachable from the same machine
-- the configured proxy group in `clash_proxy_pool.group_name` actually exists in your Clash config
-- the controller `secret`, if enabled, matches the one in Mihomo's config
+- `41001`
+- `41002`
+- `41003`
 
-## Usage
+and pair them with corresponding controller APIs. Then fill `warp_proxy_list` and enable `pool_mode: true`.
 
-Run normally:
+### 8. Create a Clash proxy pool with a deployment script
 
-```bash
-python wfxl_openai_regst.py
-```
+You can also create a Clash proxy pool on a server by generating multiple Mihomo containers through a shell script.
 
-Run once:
+#### Step 1: remove the old script if it exists
 
 ```bash
-python wfxl_openai_regst.py --once
+rm -f /root/run_clash.sh
 ```
 
-## Additional configuration fields actually used by the code
-
-The current codebase reads and uses several configuration fields that were present in `configwfxl.yaml` but not fully documented earlier in this README.
-
-### 16. `cloudmail`
-
-The code supports a `cloudmail` backend in addition to `imap`, `freemail`, and `cloudflare_temp_email`.
-
-```yaml
-cloudmail:
-  api_url: "https://your-domain.com"
-  admin_email: "admin@your-domain.com"
-  admin_password: "your-admin-password"
-```
-
-Field notes:
-
-- `api_url`: CloudMail service base URL
-- `admin_email`: administrator email used to request an access token
-- `admin_password`: administrator password used to request an access token
-
-Behavior summary:
-
-- The script first requests a CloudMail token from `/api/public/genToken`
-- It then creates mailbox users through `/api/public/addUser`
-- It later checks incoming messages through `/api/public/emailList`
-
-Use this mode with:
-
-```yaml
-email_api_mode: "cloudmail"
-```
-
-### 17. `mail_curl`
-
-The code also supports a `mail_curl` mailbox backend.
-
-```yaml
-mail_curl:
-  api_base: "https://your-domain.com"
-  key: "your-api-key"
-```
-
-Field notes:
-
-- `api_base`: Mail Curl service base URL
-- `key`: service key used for mailbox creation and message retrieval
-
-Behavior summary:
-
-- Mailboxes are requested through `/api/remail`
-- Inbox listing is queried through `/api/inbox`
-- Individual email content is fetched through `/api/mail`
-
-Use this mode with:
-
-```yaml
-email_api_mode: "mail_curl"
-```
-
-### 18. `enable_multi_thread_reg`
-
-Controls whether registration runs in concurrent worker mode.
-
-```yaml
-enable_multi_thread_reg: false
-```
-
-- `false`: single-threaded registration
-- `true`: concurrent registration using a thread pool
-
-This affects both normal registration mode and CPA replenishment mode.
-
-### 19. `reg_threads`
-
-Controls the maximum number of concurrent registration threads when multi-threading is enabled.
-
-```yaml
-reg_threads: 10
-```
-
-Recommendations:
-
-- Start low and increase gradually
-- Keep the value aligned with your proxy quality and mailbox throughput
-- Avoid setting it too high when using a single shared outbound proxy
-
-### 20. `warp_proxy_list`
-
-A list of local proxy endpoints used in Clash pool mode.
-
-```yaml
-warp_proxy_list:
-  - "http://127.0.0.1:41001"
-  - "http://127.0.0.1:41002"
-  - "http://127.0.0.1:41003"
-```
-
-Behavior summary:
-
-- This list is only used when both `clash_proxy_pool.enable: true` and `clash_proxy_pool.pool_mode: true`
-- Each proxy is treated as an independent outbound channel / container
-- The code maps proxy ports such as `41001` to controller ports such as `42001`
-
-Typical usage:
-
-- **Single local Clash instance**: leave `pool_mode: false` and `warp_proxy_list` can remain empty
-- **Multi-container server setup**: set `pool_mode: true` and provide one proxy endpoint per container
-
-### 21. `cpa_mode.remove_on_limit_reached`
-
-Controls what happens when an account reaches the weekly limit or falls below the configured remaining-quota threshold.
-
-```yaml
-cpa_mode:
-  remove_on_limit_reached: false
-```
-
-- `false`: disable the credential in CPA and keep it for possible future recovery
-- `true`: physically delete the credential from CPA storage
-
-### 22. `cpa_mode.remove_dead_accounts`
-
-Controls what happens when a credential is determined to be permanently invalid and token refresh rescue fails.
-
-```yaml
-cpa_mode:
-  remove_dead_accounts: false
-```
-
-- `false`: keep the credential but disable it
-- `true`: physically delete the credential from CPA storage
-
-### 23. `cpa_mode.threads`
-
-Controls the worker count used during CPA inventory inspection and account health checks.
-
-```yaml
-cpa_mode:
-  threads: 10
-```
-
-This is separate from `reg_threads`:
-
-- `reg_threads`: registration concurrency
-- `cpa_mode.threads`: CPA inventory inspection / rescue concurrency
-
-### 24. `normal_mode.target_count`
-
-Controls how many successful registrations to complete before the script stops automatically in normal mode.
-
-```yaml
-normal_mode:
-  target_count: 2
-```
-
-- `0`: run continuously until interrupted
-- `> 0`: stop automatically after reaching the target number of successful registrations
-
-This value is ignored by CPA maintenance mode.
-
-### 25. Environment variables
-
-In addition to YAML configuration, the code also reads several environment variables:
-
-#### `OPENAI_SSL_VERIFY`
-
-Controls HTTPS certificate verification.
-
-- default: enabled
-- set to `0`, `false`, `no`, or `off` to disable verification
-
-Example:
+#### Step 2: create the script file
 
 ```bash
-OPENAI_SSL_VERIFY=0
+nano /root/run_clash.sh
 ```
 
-#### `SKIP_NET_CHECK`
+After pasting the script content:
+- press `Ctrl+O`
+- press `Enter`
+- press `Ctrl+X`
 
-Skips the outbound network / region validation check before starting registration.
-
-- default: disabled
-- set to `1`, `true`, `yes`, or `on` to skip the check
-
-Example:
+#### Step 3: grant execute permission
 
 ```bash
-SKIP_NET_CHECK=1
+chmod +x /root/run_clash.sh
 ```
 
-#### `.env` support
+#### Step 4: run the script
 
-The script also loads a local `.env` file automatically if present in the working directory.
-
-Example:
-
-```env
-OPENAI_SSL_VERIFY=1
-SKIP_NET_CHECK=0
+```bash
+/root/run_clash.sh
 ```
 
-### 26. Config file name note
+#### Script example
 
-There is an important implementation detail in the current code:
+```bash
+#!/bin/bash
 
-- `README.md` previously described the main config file as `config.yaml`
-- the current Python code actually reads **`configwfxl.yaml`** in both `wfxl_openai_regst.py` and `proxy_manager.py`
+# ================= Configuration =================
+# Mode selection: 1 = single-subscription mode (1 URL distributed to 10 containers)
+#                 2 = multi-subscription mode (10 URLs mapped to 10 containers)
+MODE=1
 
-If you keep your config file named `config.yaml`, the current code will not read it unless you rename it or modify the code.
+# If MODE=1, fill this single URL
+SINGLE_URL="https://你的链接"
 
-If you want the documentation and code to match, choose one of these approaches:
+# If MODE=2, fill up to 10 URLs in order.
+# If fewer URLs are filled, only that many containers will be created.
+URLS=(
+ "https://链接1"
+ "https://链接2"
+ "https://链接3"
+ "https://链接4"
+ "https://链接5"
+ "https://链接6"
+ "https://链接7"
+ "https://链接8"
+ "https://链接9"
+ "https://链接10"
+)
+# ================================================
 
-1. Rename your runtime config file from `config.yaml` to `configwfxl.yaml`
-2. Or modify the code so both files read `config.yaml`
+WORK_DIR="/root/clash-pool"
+mkdir -p $WORK_DIR && cd $WORK_DIR
+
+if [ "$MODE" == "1" ]; then
+ COUNT=10
+else
+ COUNT=${#URLS[@]}
+fi
+
+echo "--- Current mode: $MODE [1:single-subscription, 2:multi-subscription] ---"
+
+cat <<EOF > docker-compose.yml
+version: "3"
+services:
+$(for ((i=1; i<=COUNT; i++)); do
+ PROXY_PORT=$((41000 + i))
+ API_PORT=$((42000 + i))
+ echo " clash_$i:
+ image: metacubex/mihomo:latest
+ container_name: clash_$i
+ restart: always
+ volumes:
+ - ./config_$i/config.yaml:/root/.config/mihomo/config.yaml
+ ports:
+ - \"$PROXY_PORT:7890\"
+ - \"$API_PORT:9090\""
+done)
+EOF
+
+docker compose down --remove-orphans
+
+if [ "$MODE" == "1" ]; then
+ echo "--- Running single-subscription distribution mode ---"
+ mkdir -p config_1
+ wget -q -U "Clash-meta" -O ./config_1/config.yaml "$SINGLE_URL"
+ if [ -s "./config_1/config.yaml" ]; then
+  for ((i=2; i<=COUNT; i++)); do
+   mkdir -p "config_$i"
+   \cp -f "./config_1/config.yaml" "./config_$i/config.yaml"
+  done
+ fi
+else
+ echo "--- Running multi-subscription download mode ---"
+ for ((i=1; i<=COUNT; i++)); do
+  idx=$((i-1))
+  CURRENT_URL=${URLS[$idx]}
+  mkdir -p "config_$i"
+  wget -q -U "Clash-meta" -O "./config_$i/config.yaml" "$CURRENT_URL"
+  echo " -> container $i download complete"
+ done
+fi
+
+for ((i=1; i<=COUNT; i++)); do
+ CONF="./config_$i/config.yaml"
+ if [ -f "$CONF" ]; then
+  grep -q "allow-lan:" "$CONF" && sed -i 's/allow-lan: .*/allow-lan: true/g' "$CONF" || echo "allow-lan: true" >> "$CONF"
+  grep -q "external-controller:" "$CONF" && sed -i 's/external-controller: .*/external-controller: 0.0.0.0:9090/g' "$CONF" || echo "external-controller: 0.0.0.0:9090" >> "$CONF"
+ fi
+done
+
+docker compose up -d
+
+echo ""
+echo "=========================================="
+echo " Copy the following into your script config: "
+echo "=========================================="
+echo "warp_proxy_list:"
+for ((i=1; i<=COUNT; i++)); do
+ echo " - \"http://127.0.0.1:$((41000 + i))\""
+done
+echo "=========================================="
+echo ""
+
+echo "--- Deployment completed! Started $COUNT containers ---"
+```
 
 ## Output Files
 
@@ -756,69 +779,72 @@ Example:
 token_user_example.com_1711111111.json
 ```
 
-These store structured output data.
+These store structured token / credential output data.
 
 ### `accounts.txt`
 
-Example content:
+Example:
 
 ```text
 example@gmail.com----password123
 ```
 
-Use care when storing or handling this file.
+This stores local account-password pairs when applicable.
 
 ## Troubleshooting
 
 ### Clash node switching fails
 Check the following:
-- Clash external control is enabled
-- `clash_proxy_pool.api_url` points to the correct controller endpoint
+- Clash API is enabled
+- `clash_proxy_pool.api_url` is correct
 - the controller `secret` is correct if authentication is enabled
-- `group_name` matches a real selectable proxy group in Clash
+- `group_name` matches a real selectable proxy group
 - `test_proxy_url` points to a working local proxy port
-- the blacklist is not too strict and does not filter out all nodes
+- the blacklist is not too strict
+
+### Multi-threaded proxy pool does not work as expected
+Check the following:
+- `enable_multi_thread_reg: true`
+- `clash_proxy_pool.enable: true`
+- `clash_proxy_pool.pool_mode: true`
+- `warp_proxy_list` is not empty
+- each listed local proxy endpoint is actually reachable
+- each proxy/container has a matching controller API
 
 ### Gmail IMAP login fails
 Check the following:
 - IMAP is enabled
 - 2-Step Verification is enabled if App Passwords are required
-- you are using an App Password, not the normal account password
-- organizational policy does not block IMAP or App Passwords
+- you are using an App Password, not the normal mailbox password
 
-### QQ Mail IMAP login fails
-Check the following:
-- IMAP is enabled
-- you are using the mailbox authorization code
-- you are not using the standard web-login password
-
-### Mailbox is created but no email arrives
+### No email arrives
 Possible causes:
 - the email landed in spam
-- proxy routing breaks email connectivity
-- `MAIL_DOMAINS` is incorrect
-- API auth is invalid
-- mailbox backend is not returning the expected message list
+- proxy routing breaks mailbox connectivity
+- mailbox backend credentials are invalid
+- domain configuration is wrong
+- the backend API is not returning the expected message list
 
 ### OTP is not extracted
 Possible causes:
 - the email body encoding is unusual
 - the verification code is not a 6-digit number
-- the message content does not match the extraction patterns
-- the message detail endpoint contains the code but the list view does not
+- the message format does not match the extraction patterns
+- the code exists only in the detail endpoint, not in the list view
+
+### CPA inspection or replenishment behaves unexpectedly
+Check the following:
+- `cpa_mode.enable` is set correctly
+- `cpa_mode.api_url` and `api_token` are correct
+- `cpa_mode.threads` is not set too high for your server/API capacity
+- `remove_on_limit_reached` / `remove_dead_accounts` match your intended policy
 
 ## Security Notes
 
-- Do not expose `accounts.txt` or JSON credential outputs publicly.
-- Prefer environment variables for sensitive configuration when possible.
+- Do not expose `accounts.txt` or token JSON outputs publicly.
+- Prefer stronger secret handling for mailbox admin credentials, CPA tokens, and Clash controller secrets.
 - Restrict access to the output directory.
-- If used in a team setting, add audit logging and permission boundaries.
-
-## Notes
-
-- This repository is intended for research, testing, and internal workflow automation.
-- Please ensure your usage complies with applicable laws, platform policies, and service terms.
-- Review and adapt configuration values before running in any real environment.
+- If used in a team environment, add audit logging and permission boundaries.
 
 ## Author
 
