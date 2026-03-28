@@ -614,6 +614,8 @@ docker compose down
 Notes:
 - `./config.yaml:/app/config.yaml` means the container reads your host-side config directly.
 - `./data:/app/data` is used to persist runtime output data.
+- The Docker web console is exposed on port `8000` by default.
+- Default web console password: `admin`
 
 ## Running Mihomo / Clash on a server
 
