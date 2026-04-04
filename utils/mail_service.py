@@ -17,12 +17,23 @@ from urllib.parse import urlparse
 import socks
 from curl_cffi import requests
 from utils import config as cfg
-
+luckmail_lock = threading.Lock()
 
 _CM_TOKEN_CACHE: Optional[str] = None
 
 _thread_data = threading.local()
 _orig_sleep = time.sleep
+LOCAL_USED_PIDS = set()
+
+def _safe_set_tag(lm_service, p_id, tag_id):
+    """带重试机制的异步打标，防止网络波动导致打标失败变成死循环号"""
+    for _ in range(3):
+        try:
+            if lm_service.set_email_tag(p_id, tag_id):
+                return
+        except Exception:
+            pass
+        time.sleep(2)
 
 def clear_sticky_domain():
     """注册失败时调用"""
@@ -137,41 +148,50 @@ def get_email_and_token(proxies: Any = None) -> tuple:
                 variant_mode=getattr(cfg, 'LUCKMAIL_VARIANT_MODE', "")
             )
 
-            email, token, p_id = None, None, None
             tag_id = getattr(cfg, 'LUCKMAIL_TAG_ID', None)
-            if getattr(cfg, 'LUCKMAIL_REUSE_PURCHASED', False):
-                if not tag_id:
-                    tag_id = lm_service.get_or_create_tag_id("已使用")
-                    if tag_id:
-                        cfg.LUCKMAIL_TAG_ID = tag_id
-                        try:
-                            import yaml
-                            with open("config.yaml", "r", encoding="utf-8") as f:
-                                y = yaml.safe_load(f) or {}
-                            y.setdefault("luckmail", {})["tag_id"] = tag_id
-                            with open("config.yaml", "w", encoding="utf-8") as f:
-                                yaml.dump(y, f, allow_unicode=True, sort_keys=False)
-                        except:
-                            pass
+            if not tag_id:
+                with luckmail_lock:
+                    tag_id = getattr(cfg, 'LUCKMAIL_TAG_ID', None)
+                    if not tag_id:
+                        tag_id = lm_service.get_or_create_tag_id("已使用")
+                        if tag_id:
+                            cfg.LUCKMAIL_TAG_ID = tag_id
+                            try:
+                                import yaml
+                                with open("config.yaml", "r", encoding="utf-8") as f:
+                                    y = yaml.safe_load(f) or {}
+                                y.setdefault("luckmail", {})["tag_id"] = tag_id
+                                with open("config.yaml", "w", encoding="utf-8") as f:
+                                    yaml.dump(y, f, allow_unicode=True, sort_keys=False)
+                                print(f"[{cfg.ts()}] [系统] 标签 ID {tag_id} 已同步至配置文件")
+                            except Exception as e:
+                                print(f"[{cfg.ts()}] [WARNING] 配置文件写入失败: {e}")
 
-                print(f"[{cfg.ts()}] [INFO] LuckMail 正在尝试从历史库复用邮箱...")
-                email, token, p_id = lm_service.get_random_purchased_email(tag_id=tag_id)
+            if getattr(cfg, 'LUCKMAIL_REUSE_PURCHASED', False):
+                with luckmail_lock:
+                    email, token, p_id = lm_service.get_random_purchased_email(tag_id=tag_id,
+                                                                               local_used_pids=LOCAL_USED_PIDS)
+                    if p_id:
+                        LOCAL_USED_PIDS.add(p_id)
 
                 if email and token:
                     print(f"[{cfg.ts()}] [SUCCESS] LuckMail 成功复用历史邮箱: ({mask_email(email)})")
-                    if p_id and tag_id: lm_service.set_email_tag(p_id, tag_id)
+                    if p_id and tag_id:
+                        threading.Thread(target=_safe_set_tag, args=(lm_service, p_id, tag_id), daemon=True).start()
                     return email, token
-                else:
-                    print(f"[{cfg.ts()}] [WARNING] 未找到可复用的号，切换至购号流程...")
+                print(f"[{cfg.ts()}] [WARNING] 未找到符合条件的历史邮箱，准备购买新号...")
+
             email, token, p_id = lm_service.get_email_and_token(auto_tag=False)
 
             if email and token:
-                print(f"[{cfg.ts()}] [INFO] LuckMail 成功购买新邮箱: ({mask_email(email)})")
                 if p_id:
-                    if not tag_id: tag_id = lm_service.get_or_create_tag_id("已使用")
-                    if tag_id:
-                        lm_service.set_email_tag(p_id, tag_id)
+                    with luckmail_lock:
+                        LOCAL_USED_PIDS.add(p_id)
 
+                print(f"[{cfg.ts()}] [INFO] LuckMail 成功购买新邮箱: ({mask_email(email)})")
+
+                if p_id and tag_id:
+                    threading.Thread(target=_safe_set_tag, args=(lm_service, p_id, tag_id), daemon=True).start()
                 return email, token
 
         except Exception as e:

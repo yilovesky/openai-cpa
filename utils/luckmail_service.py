@@ -139,13 +139,26 @@ class LuckMailService:
             print(f"[{cfg.ts()}] [WARNING] 获取 LuckMail 列表超时或失败: {e}")
             return []
 
-    def get_random_purchased_email(self, tag_id: int) -> tuple:
+    def get_random_purchased_email(self, tag_id: int, local_used_pids: set = None) -> tuple:
         import random
         keyword = self.preferred_domain if self.preferred_domain else None
-        emails = self.get_purchased_emails(keyword=keyword)
+        available_emails = []
+        for page in range(1, 4):
+            emails = self.get_purchased_emails(page=page, page_size=100, keyword=keyword)
+            if not emails:
+                break
 
-        available_emails = [e for e in emails if str(e.get("tag_id")) != str(tag_id)]
-        if not available_emails: return None, None, None
+            for e in emails:
+                p_id = self._extract_field(e, "id")
+                remote_tag = str(e.get("tag_id"))
+                if remote_tag != str(tag_id) and (not local_used_pids or p_id not in local_used_pids):
+                    available_emails.append(e)
+
+            if available_emails:
+                break
+
+        if not available_emails:
+            return None, None, None
 
         item = random.choice(available_emails)
         email = str(self._extract_field(item, "email_address") or "").strip().lower()
@@ -194,5 +207,5 @@ class LuckMailService:
         for t in tags:
             if t.get("name") == tag_name:
                 return t.get("id")
-        raise Exception(f"[LuckMail] 未找到 '{tag_name}'，正在自动创建...")
+        print(f"[{cfg.ts()}] [LuckMail] 未找到 '{tag_name}'，正在自动创建...")
         return self.create_tag(tag_name)
