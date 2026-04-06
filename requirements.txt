@@ -5,5 +5,4 @@ pydantic
 requests 
 curl_cffi 
 PySocks 
-cloudflare 
-playwright
+cloudflare
