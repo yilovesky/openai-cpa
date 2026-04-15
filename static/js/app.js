@@ -3,7 +3,7 @@ const { createApp } = Vue;
 createApp({
     data() {
         return {
-            appVersion: 'v10.0.7',
+            appVersion: 'v10.0.8',
             isLoggedIn: !!localStorage.getItem('auth_token'),
             loginPassword: '',
             currentTab: window.location.hash.replace('#', '') || 'console',
@@ -80,6 +80,8 @@ createApp({
                 cluster_secret: false, hero_key: false, duck_token: false, duck_cookie: false,
                 luckmail: false,
                 temporam: false,
+                tmailor_token: false,
+                fvia_token: false,
                 master_rt: false
             },
 
@@ -289,6 +291,12 @@ createApp({
                         client_id: '',
                         refresh_token: ''
                     };
+                }
+                if (!this.config.fvia) {
+                    this.config.fvia = { token: '' };
+                }
+                if (!this.config.tmailor) {
+                    this.config.tmailor = { current_token: '' };
                 }
                 if (!this.config.temporam) {
                     this.config.temporam = { cookie: '' };
