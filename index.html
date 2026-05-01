@@ -122,6 +122,17 @@
                         <span class="text-base" :class="currentTab === tab.id ? 'scale-110 transition-transform drop-shadow-sm' : ''">{{ tab.icon }}</span>
                         {{ tab.name }}
                     </button>
+                    <div class="flex md:hidden items-center gap-2 pl-2 ml-1 border-l border-slate-200/60 shrink-0">
+                        <button @click="restartSystem" class="whitespace-nowrap px-4 py-2.5 text-xs font-bold text-amber-600 bg-amber-50/50 rounded-xl border border-amber-200/60 shadow-sm active:scale-95 transition-all">
+                            ⚡ 重启项目
+                        </button>
+                        <button @click="checkUpdate(true)" class="whitespace-nowrap px-4 py-2.5 text-xs font-bold text-blue-600 bg-blue-50/50 rounded-xl border border-blue-200/60 shadow-sm active:scale-95 transition-all">
+                            🔄 检查更新
+                        </button>
+                        <button @click="logout" class="whitespace-nowrap px-4 py-2.5 text-xs font-bold text-slate-500 bg-slate-50 rounded-xl border border-slate-200/60 shadow-sm active:scale-95 transition-all hover:text-rose-500">
+                            🚪 退出登录
+                        </button>
+                    </div>
                 </nav>
                 <div class="hidden md:block p-4 border-t border-slate-200/60 shrink-0 mt-auto bg-transparent">
                     <button @click="restartSystem" class="w-full flex items-center justify-center gap-2 text-xs font-bold text-amber-600 hover:text-amber-700 py-3 mb-2.5 rounded-xl hover:bg-amber-100/50 transition-colors border border-amber-200/60 bg-amber-50/50 shadow-sm">
@@ -3409,7 +3420,7 @@
                                     <div class="bg-emerald-50/50 p-5 md:p-6 rounded-2xl border border-emerald-200/60 shadow-inner flex flex-col justify-center">
                                         <label class="block text-emerald-800 text-xs font-black uppercase tracking-wider mb-3">请加入官方群获取授权凭证后，上传 wenfxl.license 然后左下角重启项目</label>
                                         <div class="flex flex-col xl:flex-row gap-3 mt-auto">
-                                            <input type="file" id="licenseFileInput" accept=".license,.txt"
+                                            <input type="file" id="licenseFileInput" accept=".license,.txt,application/octet-stream,text/plain"
                                                    class="flex-1 appearance-none bg-white border border-emerald-200 text-slate-700 rounded-xl py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-colors shadow-sm text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200 cursor-pointer">
                                             <button @click="uploadLicenseFile"
                                                     class="px-5 py-2.5 bg-emerald-600 text-white text-sm font-black rounded-xl hover:bg-emerald-700 active:scale-95 transition-all shadow-md shadow-emerald-500/30 whitespace-nowrap flex items-center justify-center gap-2">
