@@ -17,15 +17,19 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name:
+      - name: 设置变量并打包
+        id: vars  # 建议给这一步加个 ID
         run: |
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-          if [[ $GITHUB_REF != refs/tags/* ]]; then
+          # 提取标签名
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+          else
             TAG_NAME="latest"
           fi
 
           ZIP_NAME="Wenfxl-Codex-Manager-${TAG_NAME}.zip"
 
+          # 这里的压缩命令保持原样，不改动非必要代码
           zip -r $ZIP_NAME . \
             -x "*.git*" \
             -x "*.github*" \
@@ -38,10 +42,12 @@ jobs:
             -x ".vscode/*"
 
           echo "ZIP_FILE=$ZIP_NAME" >> $GITHUB_ENV
+          echo "FINAL_TAG=$TAG_NAME" >> $GITHUB_ENV # 将确定的标签名存入环境
 
       - name: 发布到 GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.FINAL_TAG }} # 关键：显式指定标签名
           files: ${{ env.ZIP_FILE }}
           generate_release_notes: true
         env:
